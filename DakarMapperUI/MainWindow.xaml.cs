@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using DakarMapper;
 
@@ -11,8 +12,9 @@ namespace DakarMapperUI {
 
         private readonly PositionTracker positionTracker = new PositionTracker();
 
-        private Point minCoordinates, maxCoordinates;
-        private bool hasCoordinates;
+        private Point  minCoordinates, maxCoordinates;
+        private bool   hasCoordinates;
+        private double thickness = 1;
 
         public MainWindow() {
             InitializeComponent();
@@ -22,7 +24,8 @@ namespace DakarMapperUI {
             base.OnInitialized(e);
 
             /**/
-            positionTracker.positionChanged += onPositionChanged;
+            positionTracker.onPositionChanged += onOnPositionChanged;
+            positionTracker.onWaypointConfirmed += onWaypointConfirmed;
             positionTracker.start();
             /*/
             // var random = new Random();
@@ -35,7 +38,7 @@ namespace DakarMapperUI {
             /**/
         }
 
-        private void onPositionChanged(object sender, PointDouble position) => Dispatcher.Invoke(() => {
+        private void onOnPositionChanged(object sender, PointDouble position) => Dispatcher.Invoke(() => {
             Point newPosition = position.toWpfPoint();
             currentPositionDot.Center = newPosition;
 
@@ -56,11 +59,23 @@ namespace DakarMapperUI {
                 hasCoordinates = true;
             }
 
-            double thickness = Math.Max(0.1, Math.Max(maxCoordinates.X - minCoordinates.X, maxCoordinates.Y-minCoordinates.Y)) / Math.Max(Width, Height) * 6;
+            thickness = Math.Max(0.1, Math.Max(maxCoordinates.X - minCoordinates.X, maxCoordinates.Y - minCoordinates.Y)) / Math.Max(Width, Height) * 6;
             Trace.WriteLine("thickness = " + thickness);
             pen.Thickness = thickness;
-            currentPositionDot.RadiusX = thickness * 1.5;
-            currentPositionDot.RadiusY = thickness * 1.5;
+
+            foreach (Geometry geometry in dots.Children) {
+                if (geometry == currentPositionDot) {
+                    currentPositionDot.RadiusX = thickness * 3;
+                    currentPositionDot.RadiusY = thickness * 3;
+                } else if (geometry is EllipseGeometry dot) {
+                    dot.RadiusX = thickness * 2.4;
+                    dot.RadiusY = thickness * 2.4;
+                }
+            }
+        });
+
+        private void onWaypointConfirmed(object sender, PointDouble position) => Dispatcher.Invoke(() => {
+            dots.Children.Add(new EllipseGeometry(position.toWpfPoint(), thickness, thickness));
         });
 
     }

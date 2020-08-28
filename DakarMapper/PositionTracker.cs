@@ -4,21 +4,25 @@ namespace DakarMapper {
 
     public class PositionTracker {
 
+
+        public event PositionChangedEvent? onPositionChanged;
         public delegate void PositionChangedEvent(object sender, PointDouble position);
 
-        public event PositionChangedEvent? positionChanged;
+        public event WaypointConfirmedEvent? onWaypointConfirmed;
+        public delegate void WaypointConfirmedEvent(object sender, PointDouble position);
 
-        private readonly DistanceAndHeadingTracker distanceAndHeadingTracker = new DistanceAndHeadingTracker();
+        private readonly HeadUpDisplayScraper headUpDisplayScraper = new HeadUpDisplayScraper();
 
         private PointDouble mostRecentPosition = PointDouble.EMPTY;
         private double mostRecentDistance = 0;
 
         public void start() {
-            distanceAndHeadingTracker.onDistanceOrHeadingChanged += onDistanceOrHeadingChanged;
-            distanceAndHeadingTracker.start();
+            headUpDisplayScraper.onDistanceOrHeadingChanged += onDistanceOrHeadingChanged;
+            headUpDisplayScraper.onWaypointsChanged += onWaypointsChanged;
+            headUpDisplayScraper.start();
         }
 
-        private void onDistanceOrHeadingChanged(object sender, DistanceAndHeadingTracker.DistanceAndHeading args) {
+        private void onDistanceOrHeadingChanged(object sender, HeadUpDisplayScraper.DistanceAndHeading args) {
             double headingRadians = args.heading * Math.PI / 180;
             double distanceTraveledSinceLastChange = args.distance - mostRecentDistance;
             var distanceTraveled = new PointDouble(distanceTraveledSinceLastChange * Math.Sin(headingRadians), distanceTraveledSinceLastChange * -Math.Cos(headingRadians));
@@ -28,8 +32,12 @@ namespace DakarMapper {
             mostRecentDistance = args.distance;
 
             if (oldPosition != mostRecentPosition) {
-                positionChanged?.Invoke(this, mostRecentPosition);
+                onPositionChanged?.Invoke(this, mostRecentPosition);
             }
+        }
+        
+        private void onWaypointsChanged(object sender, int waypointsOk) {
+            onWaypointConfirmed?.Invoke(this, mostRecentPosition);
         }
 
     }
