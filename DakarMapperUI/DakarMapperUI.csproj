@@ -4,10 +4,16 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>dakar steam icon.ico</ApplicationIcon>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <None Remove="dakar steam icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ThrottleDebounce" Version="1.0.2" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,12 +5,18 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DakarMapper;
+using DakarMapper.Data;
+using Microsoft.Win32;
+using ThrottleDebounce;
 
 namespace DakarMapperUI {
 
-    public partial class MainWindow: Window {
+    public partial class MainWindow: IDisposable {
+
+        private const string WINDOW_POSITION_REGISTRY_NAME = "Window Position";
 
         private readonly PositionTracker positionTracker = new PositionTracker();
+        private readonly RegistryKey     registryKey;
 
         private Point  minCoordinates, maxCoordinates;
         private bool   hasCoordinates;
@@ -18,28 +24,34 @@ namespace DakarMapperUI {
 
         public MainWindow() {
             InitializeComponent();
+
+            registryKey = Registry.CurrentUser.CreateSubKey(@"Software\DakarMapper", true);
+            string? previousWindowPosition = (string?) registryKey.GetValue(WINDOW_POSITION_REGISTRY_NAME);
+            if (previousWindowPosition != null) {
+                string[] coordinates = previousWindowPosition.Split(',');
+                Left = Convert.ToDouble(coordinates[0]);
+                Top = Convert.ToDouble(coordinates[1]);
+                Width = Convert.ToDouble(coordinates[2]);
+                Height = Convert.ToDouble(coordinates[3]);
+            }
+
+            DebouncedAction onWindowMoved = Debouncer.Debounce(() => Dispatcher.Invoke(() => registryKey.SetValue(WINDOW_POSITION_REGISTRY_NAME, string.Join(",", new[] { Left, Top, Width, Height }))),
+                TimeSpan.FromMilliseconds(500));
+            LocationChanged += delegate { onWindowMoved.Run(); };
+            SizeChanged += delegate { onWindowMoved.Run(); };
         }
 
         protected override void OnInitialized(EventArgs e) {
             base.OnInitialized(e);
 
-            /**/
-            positionTracker.onPositionChanged += onOnPositionChanged;
-            positionTracker.onWaypointConfirmed += onWaypointConfirmed;
+            positionTracker.onPositionChanged += (sender,   position) => Dispatcher.Invoke(() => onPositionChanged(position));
+            positionTracker.onWaypointConfirmed += (sender, position) => Dispatcher.Invoke(() => onWaypointConfirmed(position));
             positionTracker.start();
-            /*/
-            // var random = new Random();
-            double distance = 1;
-            new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000), IsEnabled = true }.Tick += (sender, args) => {
-                // onPositionChanged(this, new PointDouble(random.NextDouble() * 200 - 100, random.NextDouble() * 200 - 100));
-                onPositionChanged(this, new PointDouble(distance, distance));
-                distance++;
-            };
-            /**/
         }
 
-        private void onOnPositionChanged(object sender, PointDouble position) => Dispatcher.Invoke(() => {
+        private void onPositionChanged(PointDouble position) {
             Point newPosition = position.toWpfPoint();
+            newPosition.Y *= -1; //map coordinates use up is positive Y, but WPF uses down is positive Y, so flip the sign when converting
             currentPositionDot.Center = newPosition;
 
             if (!points.Points.Any()) {
@@ -49,10 +61,10 @@ namespace DakarMapperUI {
             points.Points.Add(newPosition);
 
             if (hasCoordinates) {
-                minCoordinates.X = Math.Min(minCoordinates.X, position.x);
-                minCoordinates.Y = Math.Min(minCoordinates.Y, position.y);
-                maxCoordinates.X = Math.Max(maxCoordinates.X, position.x);
-                maxCoordinates.Y = Math.Max(maxCoordinates.Y, position.y);
+                minCoordinates.X = Math.Min(minCoordinates.X, newPosition.X);
+                minCoordinates.Y = Math.Min(minCoordinates.Y, newPosition.Y);
+                maxCoordinates.X = Math.Max(maxCoordinates.X, newPosition.X);
+                maxCoordinates.Y = Math.Max(maxCoordinates.Y, newPosition.Y);
             } else {
                 minCoordinates = newPosition;
                 maxCoordinates = newPosition;
@@ -72,11 +84,33 @@ namespace DakarMapperUI {
                     dot.RadiusY = thickness * 2.4;
                 }
             }
-        });
+        }
 
-        private void onWaypointConfirmed(object sender, PointDouble position) => Dispatcher.Invoke(() => {
-            dots.Children.Add(new EllipseGeometry(position.toWpfPoint(), thickness, thickness));
-        });
+        private void onWaypointConfirmed(PointDouble position) {
+            Point wpfPoint = position.toWpfPoint();
+            wpfPoint.Y *= -1;
+            dots.Children.Add(new EllipseGeometry(wpfPoint, thickness, thickness));
+        }
+
+        private void clear(object sender, RoutedEventArgs e) {
+            positionTracker.stop();
+            hasCoordinates = false;
+            thickness = 1;
+            minCoordinates = default;
+            maxCoordinates = default;
+
+            points.Points.Clear();
+            dots.Children.Clear();
+            dots.Children.Add(currentPositionDot);
+            currentPositionDot.RadiusX = 3;
+            currentPositionDot.RadiusY = 3;
+            positionTracker.start();
+        }
+
+        public void Dispose() {
+            positionTracker.stop();
+            registryKey.Dispose();
+        }
 
     }
 

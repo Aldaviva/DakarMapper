@@ -6,6 +6,12 @@
         xmlns:local="clr-namespace:DakarMapperUI"
         mc:Ignorable="d"
         Title="Dakar Map" Height="400" Width="400" Icon="/dakar steam icon.ico" Background="#FFE6D3AB">
+    <Window.ContextMenu>
+        <ContextMenu>
+            <MenuItem Header="_Clear" IsCheckable="False" Click="clear" />
+        </ContextMenu>
+    </Window.ContextMenu>
+
     <Grid>
         <Image x:Name="image" Stretch="Uniform" Margin="10">
             <Image.Source>

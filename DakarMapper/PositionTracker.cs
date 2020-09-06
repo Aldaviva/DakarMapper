@@ -1,9 +1,9 @@
 ﻿using System;
+using DakarMapper.Data;
 
 namespace DakarMapper {
 
     public class PositionTracker {
-
 
         public event PositionChangedEvent? onPositionChanged;
         public delegate void PositionChangedEvent(object sender, PointDouble position);
@@ -11,10 +11,16 @@ namespace DakarMapper {
         public event WaypointConfirmedEvent? onWaypointConfirmed;
         public delegate void WaypointConfirmedEvent(object sender, PointDouble position);
 
-        private readonly HeadUpDisplayScraper headUpDisplayScraper = new HeadUpDisplayScraper();
+        private readonly HeadUpDisplayScraper headUpDisplayScraper;
 
         private PointDouble mostRecentPosition = PointDouble.EMPTY;
-        private double mostRecentDistance = 0;
+        private double      mostRecentDistance = 0;
+
+        public PositionTracker(HeadUpDisplayScraper headUpDisplayScraper) {
+            this.headUpDisplayScraper = headUpDisplayScraper;
+        }
+
+        public PositionTracker(): this(new HeadUpDisplayScraperImpl()) { }
 
         public void start() {
             headUpDisplayScraper.onDistanceOrHeadingChanged += onDistanceOrHeadingChanged;
@@ -22,56 +28,33 @@ namespace DakarMapper {
             headUpDisplayScraper.start();
         }
 
-        private void onDistanceOrHeadingChanged(object sender, HeadUpDisplayScraper.DistanceAndHeading args) {
+        public void stop() {
+            headUpDisplayScraper.stop();
+            mostRecentPosition = PointDouble.EMPTY;
+            mostRecentDistance = 0;
+        }
+
+        private void onDistanceOrHeadingChanged(object? sender, DistanceAndHeading args) {
             double headingRadians = args.heading * Math.PI / 180;
             double distanceTraveledSinceLastChange = args.distance - mostRecentDistance;
-            var distanceTraveled = new PointDouble(distanceTraveledSinceLastChange * Math.Sin(headingRadians), distanceTraveledSinceLastChange * -Math.Cos(headingRadians));
+            Console.WriteLine($"Position: traveled {distanceTraveledSinceLastChange:N2} km since last update");
+            if (distanceTraveledSinceLastChange > 0) {
+                var distanceTraveled = new PointDouble(distanceTraveledSinceLastChange * Math.Sin(headingRadians), distanceTraveledSinceLastChange * Math.Cos(headingRadians));
 
-            PointDouble oldPosition = mostRecentPosition;
-            mostRecentPosition = new PointDouble(mostRecentPosition.x + distanceTraveled.x, mostRecentPosition.y + distanceTraveled.y);
-            mostRecentDistance = args.distance;
+                PointDouble oldPosition = mostRecentPosition;
+                mostRecentPosition = new PointDouble(mostRecentPosition.x + distanceTraveled.x, mostRecentPosition.y + distanceTraveled.y);
+                Console.WriteLine($"Position: moved to ({mostRecentPosition.x:N2}, {mostRecentPosition.y:N2})");
 
-            if (oldPosition != mostRecentPosition) {
-                onPositionChanged?.Invoke(this, mostRecentPosition);
+                if (oldPosition != mostRecentPosition) {
+                    onPositionChanged?.Invoke(this, mostRecentPosition);
+                }
             }
+
+            mostRecentDistance = args.distance;
         }
-        
+
         private void onWaypointsChanged(object sender, int waypointsOk) {
             onWaypointConfirmed?.Invoke(this, mostRecentPosition);
-        }
-
-    }
-
-    public readonly struct PointDouble {
-
-        public static readonly PointDouble EMPTY = new PointDouble(0, 0);
-
-        public double x { get; }
-        public double y { get; }
-
-        public PointDouble(double x, double y) {
-            this.x = x;
-            this.y = y;
-        }
-
-        public bool Equals(PointDouble other) {
-            return x.Equals(other.x) && y.Equals(other.y);
-        }
-
-        public override bool Equals(object? obj) {
-            return obj is PointDouble other && Equals(other);
-        }
-
-        public override int GetHashCode() {
-            return HashCode.Combine(x, y);
-        }
-
-        public static bool operator ==(PointDouble left, PointDouble right) {
-            return left.Equals(right);
-        }
-
-        public static bool operator !=(PointDouble left, PointDouble right) {
-            return !left.Equals(right);
         }
 
     }
